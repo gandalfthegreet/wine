@@ -1,52 +1,23 @@
 local QBCore = exports['qb-core']:GetCoreObject()
-local placedProps = {}
 
-local function LoadPlacedProps()
-    exports.oxmysql:execute('CREATE TABLE IF NOT EXISTS wine_props (id INT AUTO_INCREMENT PRIMARY KEY, coords MEDIUMTEXT)', {}, function() end)
-    exports.oxmysql:execute([[DELETE FROM wine_props WHERE coords IS NULL OR TRIM(coords) = '' OR NOT JSON_VALID(coords)]], {}, function()
-        exports.oxmysql:query('SELECT coords FROM wine_props', {}, function(result)
-            for _, row in ipairs(result) do
-                if row.coords then
-                    local ok, coords = pcall(json.decode, row.coords)
-                    if ok and coords and coords.x and coords.y and coords.z then
-                        SpawnCraftingProp(coords)
-                    end
-                end
-            end
-        end)
-    end)
-end
-
-local function SpawnCraftingProp(coords)
-    local id = #placedProps + 1
-    local obj = CreateObjectNoOffset(Config.CraftingProp, coords.x, coords.y, coords.z, true, true, true)
-    FreezeEntityPosition(obj, true)
-    local netId = NetworkGetNetworkIdFromEntity(obj)
-    placedProps[id] = { coords = coords, entity = obj, netId = netId }
-    TriggerClientEvent(-1, 'wine:spawnPropNetId', id, netId)
-end
-
-LoadPlacedProps()
-
-RegisterCommand('clearwineprops', function(source)
-    if source ~= 0 then return TriggerClientEvent('ox_lib:notify', source, { title = 'Denied', description = 'Server only command', type = 'error' }) end
-    for _, propData in pairs(placedProps) do
-        if propData.entity and DoesEntityExist(propData.entity) then
-            DeleteEntity(propData.entity)
+-- Get random zone for job
+local function GetRandomZone(exclude)
+    local zones = {}
+    for key, _ in pairs(Config.VineyardZones) do
+        if not exclude or not exclude[key] then
+            table.insert(zones, key)
         end
     end
-    table.wipe(placedProps)
-    exports.oxmysql:execute('TRUNCATE TABLE wine_props', {}, function()
-        print('[Wine] Cleared all wine props from DB and entities')
-        TriggerClientEvent('wine:clearProps', -1)
-    end)
-end, true)
+    if #zones == 0 then return nil end
+    return zones[math.random(#zones)]
+end
 
-RegisterNetEvent('wine:pickGrape', function(pointKey, zone)
+RegisterNetEvent('wine:pickGrape', function(pointKey, zoneKey, zone)
     local src = source
     local player = QBCore.Functions.GetPlayer(src)
-    if not player or not HasRequiredJob(src) then
-        TriggerClientEvent('ox_lib:notify', src, { title = 'No Access', type = 'error' })
+    -- Check if player has active job
+    if not player or not PlayerJobs[src] then
+        TriggerClientEvent('ox_lib:notify', src, { title = 'No Active Job', description = 'You need an active wine job to harvest', type = 'error' })
         return
     end
     local grapeData = Config.Grapes[zone.grapeType]
@@ -66,6 +37,20 @@ RegisterNetEvent('wine:completePick', function(pointKey, zone, success)
         player.Functions.AddItem(grapeData.item, grapeData.amount)
         TriggerClientEvent('ox_lib:notify', src, { title = 'Success', description = 'You picked ' .. grapeData.label, type = 'success' })
         SendDiscordLog('Grape Harvest', string.format('Player %s picked %s at zone', src, grapeData.label))
+
+        -- Job progression: track completion
+        local job = PlayerJobs[src]
+        if job and job.currentZone == zoneKey then
+            local zonePoints = job.completedPoints[job.currentZone] or {}
+            zonePoints[pointKey] = true
+            job.completedPoints[job.currentZone] = zonePoints
+
+            -- Check if zone is complete
+            local requiredCount = job.totalPointsRequired and job.totalPointsRequired[job.currentZone] or #zone.coords
+            if #zonePoints >= requiredCount then
+                TriggerClientEvent('wine:zoneCompleted', src)
+            end
+        end
     else
         TriggerClientEvent('ox_lib:notify', src, { title = 'Failed', description = 'You damaged the grapes!', type = 'error' })
     end
@@ -74,8 +59,8 @@ end)
 RegisterNetEvent('wine:craftWine', function(recipeKey, recipe)
     local src = source
     local player = QBCore.Functions.GetPlayer(src)
-    if not player or not HasRequiredJob(src) then
-        TriggerClientEvent('ox_lib:notify', src, { title = 'No Access', type = 'error' })
+    if not player then
+        TriggerClientEvent('ox_lib:notify', src, { title = 'Error', type = 'error' })
         return
     end
     for item, req in pairs(recipe.ingredients) do
@@ -135,46 +120,6 @@ RegisterNetEvent('wine:useWine', function(wineItem)
     SendDiscordLog('Wine Consumed', isSip and string.format('Player %s sipped %s', src, wineItem.label) or string.format('Player %s finished %s', src, wineItem.label))
 end)
 
-RegisterNetEvent('wine:placePropItem', function(coords)
-    if not coords then return end
-    local src = source
-    local player = QBCore.Functions.GetPlayer(src)
-    if not player or not player.Functions.GetItemByName(Config.CraftingItem) or player.Functions.GetItemByName(Config.CraftingItem).amount < 1 then
-        TriggerClientEvent('ox_lib:notify', src, { title = 'No Item', type = 'error' })
-        return
-    end
-    player.Functions.RemoveItem(Config.CraftingItem, 1)
-    exports.oxmysql:insert('INSERT INTO wine_props (coords) VALUES (?)', {json.encode(coords)}, function(id)
-        if id then
-            SpawnCraftingProp(coords)
-            TriggerClientEvent('ox_lib:notify', src, { title = 'Placed', type = 'success' })
-        else
-            player.Functions.AddItem(Config.CraftingItem, 1)
-            TriggerClientEvent('ox_lib:notify', src, { title = 'Error', type = 'error' })
-        end
-    end)
-end)
-
-RegisterNetEvent('wine:pickupProp', function()
-    local src = source
-    local player = QBCore.Functions.GetPlayer(src)
-    if not player then return end
-    local playerCoords = GetEntityCoords(GetPlayerPed(src))
-    for id, propData in pairs(placedProps) do
-        if GetDistanceBetweenCoords(playerCoords.x, playerCoords.y, playerCoords.z, propData.coords.x, propData.coords.y, propData.coords.z, true) < 5.0 then
-            exports.oxmysql:execute('DELETE FROM wine_props WHERE coords = ?', {json.encode(propData.coords)}, function()
-                if propData.entity and DoesEntityExist(propData.entity) then DeleteEntity(propData.entity) end
-                placedProps[id] = nil
-                TriggerClientEvent('wine:removeProp', -1, id)
-                player.Functions.AddItem(Config.CraftingItem, 1)
-                TriggerClientEvent('ox_lib:notify', src, { title = 'Picked Up', type = 'info' })
-            end)
-            return
-        end
-    end
-    TriggerClientEvent('ox_lib:notify', src, { title = 'No Prop', type = 'error' })
-end)
-
 RegisterNetEvent('wine:craftingCanceled', function(recipeKey, recipe)
     local src = source
     local player = QBCore.Functions.GetPlayer(src)
@@ -195,4 +140,69 @@ RegisterNetEvent('wine:sellWine', function(wineType, amount, price)
     player.Functions.AddMoney('cash', total)
     TriggerClientEvent('ox_lib:notify', src, { title = 'Sold', description = string.format('Sold %dx for $%d', amount, total), type = 'success' })
     SendDiscordLog('Wine Sold', string.format('Player %s sold %dx %s for $%d', src, amount, wineType, total))
+end)
+
+-- Job Management Events
+RegisterNetEvent('wine:startJob', function()
+    local src = source
+    if PlayerJobs[src] then
+        TriggerClientEvent('ox_lib:notify', src, { title = 'Job Active', type = 'error' })
+        return
+    end
+
+    -- Select random starting zone
+    local zoneKey = GetRandomZone()
+    if not zoneKey then
+        TriggerClientEvent('ox_lib:notify', src, { title = 'No Zones', type = 'error' })
+        return
+    end
+
+    -- Calculate zone point counts
+    local zoneCounts = {}
+    for z, zone in pairs(Config.VineyardZones) do
+        local numToSelect = zone.randompickpoints or #zone.coords
+        zoneCounts[z] = numToSelect >= #zone.coords and #zone.coords or numToSelect
+    end
+
+    PlayerJobs[src] = {
+        active = true,
+        currentZone = zoneKey,
+        completedZones = {},
+        completedPoints = {},
+        totalPointsRequired = zoneCounts
+    }
+
+    TriggerClientEvent('wine:startJob', src, zoneKey, {}, zoneCounts)
+    SendDiscordLog('Job Started', string.format('Player %s started wine job in %s', src, zoneKey))
+end)
+
+RegisterNetEvent('wine:cancelJob', function()
+    local src = source
+    if not PlayerJobs[src] then return end
+
+    PlayerJobs[src] = nil
+    TriggerClientEvent('wine:cancelJob', src)
+    SendDiscordLog('Job Canceled', string.format('Player %s canceled wine job', src))
+end)
+
+RegisterNetEvent('wine:zoneCompleted', function()
+    local src = source
+    local job = PlayerJobs[src]
+    if not job then return end
+
+    -- Mark zone as completed
+    job.completedZones[job.currentZone] = true
+    job.completedPoints[job.currentZone] = {}
+
+    -- Find next zone
+    local nextZone = GetRandomZone(job.completedZones)
+    if not nextZone then
+        -- All zones done
+        PlayerJobs[src] = nil
+        TriggerClientEvent('wine:jobDone', src)
+        SendDiscordLog('Job Completed', string.format('Player %s completed all wine zones', src))
+    else
+        job.currentZone = nextZone
+        TriggerClientEvent('wine:nextZone', src, nextZone, {})
+    end
 end)

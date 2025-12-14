@@ -136,10 +136,10 @@ Config = {
         ['sauvignon_blanc'] = { item = 'grape_sauvignon', label = 'Sauvignon Blanc Grapes', amount = 4 },
         ['rose'] = { item = 'grape_rose', label = 'Rose Grapes', amount = 3 },
     },
-    -- Crafting Prop
-    CraftingProp = 'prop_wooden_barrel', -- Wine barrel
-    CraftingItem = 'wooden_wine_barrel', -- Item to place prop
-    CraftingCoords = nil,
+    -- Fixed Crafting Locations
+    CraftingLocations = {
+        vec3(-1928.42, 2060.6, 139.84),
+    },
     -- Crafting Recipes
     Recipes = {
         ['wine_cabernet'] = {
@@ -209,18 +209,21 @@ WineBuyer = {
         ['wine_white_blend'] = 55,
     }
 },
-    -- Logging
-    DiscordWebhook = '', -- Replace with actual URL
-    -- Debug: Enable harvest point visualization
-    Debug = false,
-    -- Wine: Enable built-in consumption effects (false for external food script handling)
-    EnableWineConsumption = true,
-    -- Job: Require specific job for harvesting/placing (nil to disable)
-    RequiredJob = nil
+-- Job Manager PED
+JobManager = {
+    location = vec4(-1889.26, 2050.83, 139.99, 167.73),
+    model = 'a_m_m_farmer_01',
+    animations = { dict = 'amb@world_human_hang_out_street@female_arms_crossed@base', clip = 'base' },
+},
+-- Debug: Enable harvest point visualization
+Debug = false,
+-- Wine: Enable built-in consumption effects (false for external food script handling)
+EnableWineConsumption = true,
+-- Logging
+DiscordWebhook = '' -- Replace with actual URL
 }
 
--- ox_inventory Items (ensure added to ox_inventory config)
+-- ox_inventory Items (required in ox_inventory config)
 -- Grapes items: grape_cabernet, grape_chardonnay, grape_merlot, grape_sauvignon, grape_rose
 -- Wine items: wine_cabernet, wine_chardonnay, wine_merlot, wine_sauvignon, wine_rose, wine_red_blend, wine_white_blend
--- Add for wine items: client = { event = 'wine:usage' }
--- Crafting item: wooden_wine_barrel client = { event = 'wine:placePropItem' }
+-- Important: Add client = { event = 'wine:usage' } to each wine item definition

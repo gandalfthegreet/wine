@@ -1,30 +1,7 @@
 local QBCore = exports['qb-core']:GetCoreObject()
 
--- Generate random coords within zone (legacy)
-function GenerateGrapeCoords(zone)
-    local center = zone.center
-    local radius = zone.radius
-    local attempts = 0
-    local maxAttempts = 10
-    while attempts < maxAttempts do
-        local x = center.x + math.random(-radius, radius)
-        local y = center.y + math.random(-radius, radius)
-        local z = center.z + 10.0
-        local success, groundZ = GetGroundZFor_3dCoord(x, y, z, true)
-        if success then
-            return vector3(x, y, groundZ)
-        end
-        attempts = attempts + 1
-    end
-    return center
-end
-
--- Check if player has required job
-function HasRequiredJob(source)
-    if not Config.RequiredJob then return true end
-    local player = QBCore.Functions.GetPlayer(source)
-    return player.PlayerData.job.name == Config.RequiredJob
-end
+-- Job state per player
+PlayerJobs = {}
 
 -- Check if wine is aged
 function IsWineAged(metadata)
