@@ -1,4 +1,7 @@
--- Usables handled via sprinkles inventory
+-- Wine item usage
+RegisterNetEvent('wine:usage', function(item)
+    TriggerServerEvent('wine:useWine', item.name)
+end)
 
 -- Event to handle drinking
 RegisterNetEvent('wine:drinkWine', function(wineItem, sip)

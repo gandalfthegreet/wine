@@ -1,6 +1,6 @@
-local QBOXCore = exports['qb-core']:GetCoreObject()
+local QBCore = exports['qb-core']:GetCoreObject()
 
--- Utility: Generate random coords within zone
+-- Generate random coords within zone (legacy)
 function GenerateGrapeCoords(zone)
     local center = zone.center
     local radius = zone.radius
@@ -9,32 +9,30 @@ function GenerateGrapeCoords(zone)
     while attempts < maxAttempts do
         local x = center.x + math.random(-radius, radius)
         local y = center.y + math.random(-radius, radius)
-        local z = center.z + 10.0 -- search above
+        local z = center.z + 10.0
         local success, groundZ = GetGroundZFor_3dCoord(x, y, z, true)
         if success then
             return vector3(x, y, groundZ)
         end
         attempts = attempts + 1
     end
-    return center -- fallback
+    return center
 end
 
--- Utility: Check if player has job (if required)
+-- Check if player has required job
 function HasRequiredJob(source)
     if not Config.RequiredJob then return true end
-    local player = QBOXCore.Functions.GetPlayer(source)
+    local player = QBCore.Functions.GetPlayer(source)
     return player.PlayerData.job.name == Config.RequiredJob
 end
 
--- Utility: Check aging bonus
+-- Check if wine is aged
 function IsWineAged(metadata)
     if not metadata.created then return false end
-    local createdTime = metadata.created
-    local currentTime = os.time()
-    return (currentTime - createdTime) >= Config.AgingTime
+    return (os.time() - metadata.created) >= Config.AgingTime
 end
 
--- Utility: Apply aging bonus to effects
+-- Apply aging bonus to effects
 function ApplyAgingBonus(wineType, metadata)
     local effects = Config.Effects[wineType]
     if not effects or not IsWineAged(metadata) then return effects end
@@ -48,20 +46,15 @@ function ApplyAgingBonus(wineType, metadata)
     }
 end
 
--- Utility: Discord logging function
+-- Discord logging
 function SendDiscordLog(title, message, color)
-    if Config.DiscordWebhook == '' then return end
-    local embed = {
-        {
-            ["title"] = title,
-            ["description"] = message,
-            ["color"] = color or 16744192, -- Orange
-            ["footer"] = {
-                ["text"] = "Wine Script Log",
-                ["icon_url"] = "https://i.imgur.com/removed.png" -- Placeholder
-            },
-            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
-        }
-    }
-    PerformHttpRequest(Config.DiscordWebhook, function(err, text, headers) end, 'POST', json.encode({username = "Wine Script", embeds = embed}), { ['Content-Type'] = 'application/json' })
+    if not Config.DiscordWebhook or Config.DiscordWebhook == '' then return end
+    local embed = {{
+        ["title"] = title,
+        ["description"] = message,
+        ["color"] = color or 16744192,
+        ["footer"] = { ["text"] = "Wine Script" },
+        ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+    }}
+    PerformHttpRequest(Config.DiscordWebhook, function(err) end, 'POST', json.encode({username = "Wine Script", embeds = embed}), { ['Content-Type'] = 'application/json' })
 end

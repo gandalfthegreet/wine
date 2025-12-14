@@ -211,14 +211,16 @@ WineBuyer = {
 },
     -- Logging
     DiscordWebhook = '', -- Replace with actual URL
-    -- Debug Mode for harvest point visualization
-    DebugMode = false, -- Set to false to disable debug spheres
-    -- Enable Wine Consumption (set false to let other scripts handle drinking)
+    -- Debug: Enable harvest point visualization
+    Debug = false,
+    -- Wine: Enable built-in consumption effects (false for external food script handling)
     EnableWineConsumption = true,
-    -- Job Requirement (optional)
-    RequiredJob = nil, -- Set to 'winemaker' if wanted, else false
+    -- Job: Require specific job for harvesting/placing (nil to disable)
+    RequiredJob = nil
 }
 
 -- ox_inventory Items (ensure added to ox_inventory config)
 -- Grapes items: grape_cabernet, grape_chardonnay, grape_merlot, grape_sauvignon, grape_rose
 -- Wine items: wine_cabernet, wine_chardonnay, wine_merlot, wine_sauvignon, wine_rose, wine_red_blend, wine_white_blend
+-- Add for wine items: client = { event = 'wine:usage' }
+-- Crafting item: wooden_wine_barrel client = { event = 'wine:placePropItem' }

@@ -1,106 +1,52 @@
 local placedProps = {}
 
--- Ply loaded, request props
-RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
-    TriggerServerEvent('wine:playerJoined')
-end)
-
--- On resource start, request props (for script restart)
-CreateThread(function()
-    Wait(5000) -- wait for server to load props
-    TriggerServerEvent('wine:playerJoined')
-end)
-
--- Manual load props
-RegisterCommand('loadwineprops', function()
-    TriggerServerEvent('wine:playerJoined')
-end, false)
-
--- Item use event
+-- Item use event for placing barrel
 RegisterNetEvent('wine:placePropItem', function()
     TriggerServerEvent('wine:placePropItem', DeterminePlaceCoords())
 end)
 
 function DeterminePlaceCoords()
-    -- Raycast to place on ground
     local coords = GetOffsetFromEntityInWorldCoords(cache.ped, 0.0, 2.0, 0.0)
     local success, groundZ = GetGroundZFor_3dCoord(coords.x, coords.y, coords.z, true)
     if not success then coords = GetEntityCoords(cache.ped) end
     return coords
 end
 
--- Event: Spawn prop
-RegisterNetEvent('wine:spawnProp', function(id, coords)
-    print('[Wine Client] Spawning prop ' .. id .. ' at ' .. tostring(coords.x) .. ',' .. tostring(coords.y) .. ',' .. tostring(coords.z))
-    lib.requestModel(Config.CraftingProp)
-    local propEntity = CreateObject(Config.CraftingProp, coords.x, coords.y, coords.z, false, true, true)
-    print('[Wine Client] Created object: ' .. tostring(propEntity) .. ' exists: ' .. tostring(DoesEntityExist(propEntity)))
-    PlaceObjectOnGroundProperly(propEntity)
-    FreezeEntityPosition(propEntity, true)
-
-    placedProps[id] = propEntity
-
-    -- Add ox_target
-    exports.ox_target:addLocalEntity(propEntity, {{
-        label = 'Craft Wine',
-        icon = 'fa-solid fa-wine-bottle',
-        onSelect = function()
-            OpenCraftingMenu()
-        end
-    }, {
-        label = 'Pick Up Prop',
-        icon = 'fa-solid fa-hand-paper',
-        onSelect = function()
-            TriggerServerEvent('wine:pickupProp', id)
-        end
-    }})
-    print('[Wine Client] Prop ' .. id .. ' setup complete')
-end)
-
--- Event: Spawn multiple props (for player load)
-RegisterNetEvent('wine:spawnAllProps', function(propsToSpawn)
-    for id, coords in pairs(propsToSpawn) do
-        local propEntity = nil
-        if not placedProps[id] then
-            lib.requestModel(Config.CraftingProp)
-            propEntity = CreateObject(Config.CraftingProp, coords.x, coords.y, coords.z, false, true, true)
-            PlaceObjectOnGroundProperly(propEntity)
-            FreezeEntityPosition(propEntity, true)
-            placedProps[id] = propEntity
-        end
-        if placedProps[id] then
-            -- Add ox_target
-            exports.ox_target:addLocalEntity(placedProps[id], {{
-                label = 'Craft Wine',
-                icon = 'fa-solid fa-wine-bottle',
-                onSelect = function()
-                    OpenCraftingMenu()
-                end
-            }, {
-                label = 'Pick Up Prop',
-                icon = 'fa-solid fa-hand-paper',
-                onSelect = function()
-                    TriggerServerEvent('wine:pickupProp', id)
-                end
-            }})
-        end
+-- Spawn networked crafting prop
+RegisterNetEvent('wine:spawnPropNetId', function(id, netId)
+    local propEntity = NetworkGetEntityFromNetworkId(netId)
+    if DoesEntityExist(propEntity) then
+        SetEntityAsMissionEntity(propEntity, true, true)
+        PlaceObjectOnGroundProperly(propEntity)
+        FreezeEntityPosition(propEntity, true)
+        placedProps[id] = propEntity
+        exports.ox_target:addLocalEntity(propEntity, {{
+            name = 'wine_craft',
+            label = 'Craft Wine',
+            icon = 'fa-solid fa-wine-bottle',
+            onSelect = OpenCraftingMenu,
+            distance = 2.0
+        }, {
+            name = 'wine_pickup',
+            label = 'Pick Up Barrel',
+            icon = 'fa-solid fa-hand-paper',
+            onSelect = function()
+                TriggerServerEvent('wine:pickupProp', id)
+            end,
+            distance = 2.0
+        }})
     end
 end)
 
--- Event: Remove prop
+-- Remove prop target
 RegisterNetEvent('wine:removeProp', function(id)
     if placedProps[id] then
-        DeleteEntity(placedProps[id])
         placedProps[id] = nil
     end
 end)
 
--- Event: Clear all props
+-- Clear all props (admin)
 RegisterNetEvent('wine:clearProps', function()
-    for id, prop in pairs(placedProps) do
-        DeleteEntity(prop)
-        placedProps[id] = nil
-    end
     placedProps = {}
 end)
 

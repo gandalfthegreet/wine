@@ -4,17 +4,17 @@ local pickCooldowns = {}
 
 -- Initialize grape pick points on load
 CreateThread(function()
-    Wait(1000) -- Wait for config load
+    Wait(1000)
     for zoneKey, zone in pairs(Config.VineyardZones) do
         local selectedCoords = {}
         local coordsList = zone.coords
         local numToSelect = zone.randompickpoints or #coordsList
 
-        -- Shuffle and select random coords if less than total
         if numToSelect >= #coordsList then
             selectedCoords = coordsList
         else
-            local shuffled = lib.table.clone(coordsList)
+            local shuffled = {}
+            for _, v in ipairs(coordsList) do table.insert(shuffled, v) end
             for i = #shuffled, 2, -1 do
                 local j = math.random(i)
                 shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
@@ -31,7 +31,6 @@ CreateThread(function()
                 zone = zone,
                 active = true
             }
-            -- Add ox_target
             exports.ox_target:addSphereZone({
                 coords = coords,
                 radius = 2.0,
@@ -40,7 +39,7 @@ CreateThread(function()
                     label = 'Pick ' .. Config.Grapes[zone.grapeType].label,
                     icon = 'fa-solid fa-leaf',
                     distance = 2.5,
-                    canInteract = function(entity, distance, coords, name)
+                    canInteract = function()
                         return activePickPoints[pointKey].active and not pickCooldowns[pointKey]
                     end,
                     onSelect = function()
@@ -48,7 +47,6 @@ CreateThread(function()
                     end
                 }}
             })
-            if Config.DebugMode then print('[Wine Debug] Added harvest point: ' .. pointKey .. ' at ' .. tostring(coords)) end
         end
     end
 end)
