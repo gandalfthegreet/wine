@@ -68,18 +68,20 @@ end)
 function OpenSellMenu()
     local sellOptions = {}
     for wineType, price in pairs(Config.WineBuyer.prices) do
-        local count = exports.ox_inventory:Search('count', wineType)
-        if count > 0 then
+        -- Get wine count (works with non-stacked items)
+        local wineCount = exports.ox_inventory:Search('count', wineType) or 0
+
+        if wineCount > 0 then
             table.insert(sellOptions, {
                 title = wineType:gsub('_', ' '):gsub('wine ', ''),
-                description = ('You have %dx ($%d each)'):format(count, price),
+                description = ('You have %dx ($%d each)'):format(wineCount, price),
                 onSelect = function()
-                    local input = lib.inputDialog('Sell Wine', {
-                        {type = 'number', label = 'Amount', min = 1, max = count, required = true}
+                    local input = lib.inputDialog('Sell ' .. wineType:gsub('_', ' '):gsub('wine ', ' Wine'), {
+                        {type = 'number', label = 'Amount', min = 1, max = wineCount, required = true}
                     })
                     if input and input[1] then
                         local amount = input[1]
-                        TriggerServerEvent('wine:sellWine', wineType, amount, price)
+                        TriggerServerEvent('wine:sellWineBatch', wineType, amount, price)
                     end
                 end
             })

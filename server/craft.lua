@@ -142,6 +142,23 @@ RegisterNetEvent('wine:sellWine', function(wineType, amount, price)
     SendDiscordLog('Wine Sold', string.format('Player %s sold %dx %s for $%d', src, amount, wineType, total))
 end)
 
+RegisterNetEvent('wine:sellWineBatch', function(wineType, amount, price)
+    local src = source
+    local player = QBCore.Functions.GetPlayer(src)
+    if not player then return end
+
+    -- Try to process the batch sale directly (QBCore handles inventory validation)
+    local success = player.Functions.RemoveItem(wineType, amount)
+    if success then
+        local totalAmount = amount * price
+        player.Functions.AddMoney('cash', totalAmount)
+        TriggerClientEvent('ox_lib:notify', src, { title = 'Sold', description = string.format('Sold %dx %s for $%d', amount, wineType:gsub('_', ' '), totalAmount), type = 'success' })
+        SendDiscordLog('Wine Batch Sold', string.format('Player %s sold %dx %s for $%d', src, amount, wineType, totalAmount))
+    else
+        TriggerClientEvent('ox_lib:notify', src, { title = 'Sale Failed', description = 'Could not sell the wines', type = 'error' })
+    end
+end)
+
 -- Job Management Events
 RegisterNetEvent('wine:startJob', function()
     local src = source

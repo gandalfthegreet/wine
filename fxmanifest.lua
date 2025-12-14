@@ -3,8 +3,8 @@ game 'gta5'
 lua54 'yes'
 use_fxv2_oal 'yes'
 
-name 'Test Wine Script'
-author 'Generated'
+name 'wine production system'
+author 'gandalfthegreet'
 version '1.0.0'
 
 shared_scripts{
