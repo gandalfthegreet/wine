@@ -1,5 +1,65 @@
 local QBOXCore = exports['qb-core']:GetCoreObject()
 
+-- Prop storage
+local placedProps = {}
+
+function LoadPlacedProps()
+    exports.oxmysql:execute('CREATE TABLE IF NOT EXISTS wine_props (id INT AUTO_INCREMENT PRIMARY KEY, coords MEDIUMTEXT)', {}, function()
+    end)
+    exports.oxmysql:execute([[DELETE FROM wine_props WHERE coords IS NULL OR TRIM(coords) = '' OR NOT JSON_VALID(coords)]], {}, function()
+        exports.oxmysql:query('SELECT coords FROM wine_props', {}, function(result)
+            print('[Wine Debug] Loading ' .. #result .. ' props from DB')
+            for i, row in ipairs(result) do
+                if row.coords then
+                    local ok, coords = pcall(json.decode, row.coords)
+                    if ok and coords and type(coords) == 'table' and coords.x and coords.y and coords.z then
+                        print('[Wine Debug] Loading prop ' .. i .. ' at' .. coords.x .. ',' .. coords.y .. ',' .. coords.z)
+                        SpawnCraftingProp(coords)
+                    else
+                        print('[Wine Debug] Skipping invalid prop ' .. i .. ': ' .. tostring(row.coords))
+                    end
+                end
+            end
+        end)
+    end)
+end
+
+-- Load props on server start
+LoadPlacedProps()
+
+-- Send props to players when they load
+RegisterNetEvent('wine:playerJoined', function()
+    local source = source
+    local propsForPlayer = {}
+    for id, propData in pairs(placedProps) do
+        propsForPlayer[id] = propData.coords
+    end
+    TriggerClientEvent('wine:spawnAllProps', source, propsForPlayer)
+end)
+
+-- Command to clear all props (admin)
+RegisterCommand('clearwineprops', function(source)
+    if source ~= 0 then -- only console/server
+        TriggerClientEvent('ox_lib:notify', source, { title = 'Denied', description = 'Server only command', type = 'error' })
+        return
+    end
+    exports.oxmysql:execute('TRUNCATE TABLE wine_props', {}, function()
+        placedProps = {}
+        print('[Wine] Cleared all wine props from DB')
+        TriggerClientEvent('wine:clearProps', -1)
+    end)
+end, true)
+
+function SpawnCraftingProp(coords)
+    local id = #placedProps + 1
+    placedProps[id] = {
+        coords = coords,
+        entity = nil
+    }
+    -- Spawn and setup
+    TriggerClientEvent('wine:spawnProp', -1, id, coords)
+end
+
 -- Event: Pick grape
 RegisterNetEvent('wine:pickGrape', function(pointKey, zone)
     local source = source
@@ -150,6 +210,95 @@ RegisterNetEvent('wine:useWine', function(wineItem)
     exports.ox_inventory:SetMetadata(source, foundItem.slot, metadata)
     TriggerClientEvent('wine:drinkWine', source, wineItem, isSip)
     SendDiscordLog('Wine Consumed', ('Player %s sipped %s'):format(source, wineItem.label))
+end)
+
+-- Event: Place prop (item use)
+RegisterNetEvent('wine:placePropItem', function(coords)
+    if not coords then return end
+    print('Server placePropItem coords: ' .. tostring(coords.x) .. ',' .. tostring(coords.y) .. ',' .. tostring(coords.z))
+    local playerSource = source
+    local player = QBOXCore.Functions.GetPlayer(playerSource)
+    if not player then return end
+
+    local item = player.Functions.GetItemByName(Config.CraftingItem)
+    if not item or item.amount < 1 then
+        TriggerClientEvent('ox_lib:notify', playerSource, { title = 'No Item', description = 'You need a wooden wine barrel', type = 'error' })
+        return
+    end
+    player.Functions.RemoveItem(Config.CraftingItem, 1)
+
+    exports.oxmysql:insert('INSERT INTO wine_props (coords) VALUES (?)', {json.encode(coords)}, function(insertId)
+        print('Insert result, id: ' .. tostring(insertId))
+        if insertId then
+            SpawnCraftingProp(coords)
+            TriggerClientEvent('ox_lib:notify', playerSource, { title = 'Placed', description = 'Crafting prop placed and saved', type = 'success' })
+        else
+            -- Refund item if save failed
+            player.Functions.AddItem(Config.CraftingItem, 1)
+            TriggerClientEvent('ox_lib:notify', playerSource, { title = 'Error', description = 'Failed to save prop', type = 'error' })
+        end
+    end)
+end)
+
+-- Event: Place prop (old command)
+RegisterNetEvent('wine:placeProp', function(coords)
+    if not coords then return end
+    print('Server placeProp coords: ' .. tostring(coords.x) .. ',' .. tostring(coords.y) .. ',' .. tostring(coords.z))
+    local playerSource = source
+
+    exports.oxmysql:insert('INSERT INTO wine_props (coords) VALUES (?)', {json.encode(coords)}, function(insertId)
+        print('Insert result, id: ' .. tostring(insertId))
+        if insertId then
+            SpawnCraftingProp(coords)
+            TriggerClientEvent('ox_lib:notify', playerSource, { title = 'Placed', description = 'Crafting prop placed and saved', type = 'success' })
+        else
+            TriggerClientEvent('ox_lib:notify', playerSource, { title = 'Error', description = 'Failed to save prop', type = 'error' })
+        end
+    end)
+end)
+
+-- Event: Pickup prop
+RegisterNetEvent('wine:pickupProp', function()
+    local source = source
+    local player = QBOXCore.Functions.GetPlayer(source)
+    if not player then return end
+
+    -- Find prop near player
+    local playerCoords = GetEntityCoords(GetPlayerPed(source))
+    local propFound = false
+    for id, propData in pairs(placedProps) do
+        local dist = math.sqrt((playerCoords.x - propData.coords.x)^2 + (playerCoords.y - propData.coords.y)^2 + (playerCoords.z - propData.coords.z)^2)
+        if dist < 5.0 then
+            -- Remove from DB
+            exports.oxmysql:execute('DELETE FROM wine_props WHERE coords = ?', {json.encode(propData.coords)}, function()
+                placedProps[id] = nil
+                TriggerClientEvent('wine:removeProp', -1, id)
+                -- Add item back
+                player.Functions.AddItem(Config.CraftingItem, 1)
+                TriggerClientEvent('ox_lib:notify', source, { title = 'Picked Up', description = 'Wooden wine barrel picked up', type = 'info' })
+            end)
+            propFound = true
+            break
+        end
+    end
+
+    if not propFound then
+        TriggerClientEvent('ox_lib:notify', source, { title = 'No Prop', description = 'No prop found nearby', type = 'error' })
+    end
+end)
+
+-- Event: Crafting canceled, refund ingredients
+RegisterNetEvent('wine:craftingCanceled', function(recipeKey, recipe)
+    local source = source
+    local player = QBOXCore.Functions.GetPlayer(source)
+    if not player then return end
+
+    -- Refund ingredients
+    for item, req in pairs(recipe.ingredients) do
+        player.Functions.AddItem(item, req.amount)
+    end
+
+    TriggerClientEvent('ox_lib:notify', source, { title = 'Refunted', description = 'Ingredients refunded due to cancel', type = 'info' })
 end)
 
 -- Event: Sell wine

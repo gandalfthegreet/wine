@@ -24,24 +24,28 @@ RegisterNetEvent('wine:drinkWine', function(wineItem, sip)
     AttachEntityToEntity(propEntity, cache.ped, GetPedBoneIndex(cache.ped, 57005), 0.13, -0.02, 0.0, 0.0, 0.0, 0.0, true, true, false, false, 1, true)
 
     -- Apply effects
-    if effects.type == 'drunk' then
-        lib.notify({ title = 'Drinking', description = 'You feel the effects coming...', type = 'info' })
-        -- Apply drunk effects immediately
-        -- Screen effects removed due to invalid GTA V effects
-        SetPedMotionBlur(cache.ped, true)
-        ShakeGameplayCam('SMALL_EXPLOSION_SHAKE', effects.strength)
-        -- Clear after duration
-        SetTimeout(effects.duration, function()
-            SetPedMotionBlur(cache.ped, false)
-            StopGameplayCamShaking(true)
-        end)
-    elseif effects.type == 'buff' then
-        -- Buff effect, perhaps speed or strength increase
-        SetRunSprintMultiplierForPlayer(cache.ped, effects.strength + 1.0)
-        -- Screen effects removed due to invalid GTA V effects
-        SetTimeout(effects.duration, function()
-            SetRunSprintMultiplierForPlayer(cache.ped, 1.0)
-        end)
+    if Config.EnableWineConsumption then
+        if effects.type == 'drunk' then
+            lib.notify({ title = 'Drinking', description = 'You feel the effects coming...', type = 'info' })
+            -- Apply drunk effects immediately
+            -- Screen effects removed due to invalid GTA V effects
+            SetPedMotionBlur(cache.ped, true)
+            ShakeGameplayCam('SMALL_EXPLOSION_SHAKE', effects.strength)
+            -- Clear after duration
+            SetTimeout(effects.duration, function()
+                SetPedMotionBlur(cache.ped, false)
+                StopGameplayCamShaking(true)
+            end)
+        elseif effects.type == 'buff' then
+            -- Buff effect, perhaps speed or strength increase
+            SetRunSprintMultiplierForPlayer(cache.ped, effects.strength + 1.0)
+            -- Screen effects removed due to invalid GTA V effects
+            SetTimeout(effects.duration, function()
+                SetRunSprintMultiplierForPlayer(cache.ped, 1.0)
+            end)
+        end
+    else
+        lib.notify({ title = 'Drinking', description = 'Passed to external consumption system', type = 'info' })
     end
 
     -- Remove prop after animation

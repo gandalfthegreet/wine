@@ -137,8 +137,9 @@ Config = {
         ['rose'] = { item = 'grape_rose', label = 'Rose Grapes', amount = 3 },
     },
     -- Crafting Prop
-    CraftingProp = 'v_ret_ml_win2', -- Wine display rack
-    CraftingCoords = nil, -- Set when placed
+    CraftingProp = 'prop_wooden_barrel', -- Wine barrel
+    CraftingItem = 'wooden_wine_barrel', -- Item to place prop
+    CraftingCoords = nil,
     -- Crafting Recipes
     Recipes = {
         ['wine_cabernet'] = {
@@ -195,7 +196,7 @@ Config = {
     SipAnimation = 'WORLD_HUMAN_SMOKING_POT', -- shorter sip animation
 -- Wine Buyer NPC
 WineBuyer = {
-    location = vec4(-1886.77, 2049.76, 139.98 - 0.9, 163.3),
+    location = vec4(-1886.77, 2049.76, 139.98, 163.3),
     model = 'a_m_m_hillbilly_01', -- NPC model
     animations = { dict = 'mini@strip_club@idles@bouncer@base', clip = 'base' },
     prices = {
@@ -212,6 +213,8 @@ WineBuyer = {
     DiscordWebhook = '', -- Replace with actual URL
     -- Debug Mode for harvest point visualization
     DebugMode = false, -- Set to false to disable debug spheres
+    -- Enable Wine Consumption (set false to let other scripts handle drinking)
+    EnableWineConsumption = true,
     -- Job Requirement (optional)
     RequiredJob = nil, -- Set to 'winemaker' if wanted, else false
 }
