@@ -1,7 +1,19 @@
 Config = {
+   blip = {
+    vineyard = {
+        enabled = true,
+        coords = vec3(-1896.39, 2034.19, 140.74),
+        sprite = 93,     -- wine bottle-ish icon (change if you want)
+        color = 27,
+        scale = 0.8,
+        name = "Vineyard",
+        shortrange = true, 
+    },
+},
+   
     -- Vineyard Zones with predefined coords
     VineyardZones = {
-    ['red_zone'] = {
+        ['red_zone'] = {
             coords = {
                 vec3(-1970.96, 1938.14, 169.88), vec3(-1947.93, 1925.14, 170.91), vec3(-1936.75, 1918.63, 170.94),
                 vec3(-1923.62, 1910.88, 170.23), vec3(-1914.37, 1905.55, 168.76), vec3(-1921.64, 1904.61, 171.29),
@@ -13,8 +25,8 @@ Config = {
             randompickpoints = 6,
             grapeType = 'cabernet_sauvignon',
             difficulty = 'hard',
-            animDict = 'amb@world_human_gardener_plant@male@base',
-            animClip = 'base',
+            animDict = 'mp_arresting',
+            animClip = 'a_uncuff',
             particleFx = 'core'
         },
         ['white_zone'] = {
@@ -32,8 +44,8 @@ Config = {
             randompickpoints = 15,
             grapeType = 'chardonnay',
             difficulty = 'medium',
-            animDict = 'amb@world_human_gardener_plant@male@base',
-            animClip = 'base',
+            animDict = 'mp_arresting',
+            animClip = 'a_uncuff',
             particleFx = 'core'
         },
         ['merlot_zone'] = {
@@ -56,8 +68,8 @@ Config = {
             randompickpoints = 25,
             grapeType = 'merlot',
             difficulty = 'easy',
-            animDict = 'amb@world_human_gardener_plant@male@base',
-            animClip = 'base',
+            animDict = 'mp_arresting',
+            animClip = 'a_uncuff',
             particleFx = 'core'
         },
         ['sauvignon_zone'] = {
@@ -83,8 +95,8 @@ Config = {
             randompickpoints = 35,
             grapeType = 'sauvignon_blanc',
             difficulty = 'medium',
-            animDict = 'amb@world_human_gardener_plant@male@base',
-            animClip = 'base',
+            animDict = 'mp_arresting',
+            animClip = 'a_uncuff',
             particleFx = 'core'
         },
         ['rose_zone'] = {
@@ -115,8 +127,8 @@ Config = {
             randompickpoints = 45,
             grapeType = 'rose',
             difficulty = 'easy',
-            animDict = 'amb@world_human_gardener_plant@male@base',
-            animClip = 'base',
+            animDict = 'mp_arresting',
+            animClip = 'a_uncuff',
             particleFx = 'core'
         },
     },
@@ -167,15 +179,15 @@ Config = {
             duration = 20000,
             output = { item = 'wine_rose', amount = 1, label = 'Rose Wine', sips = 5 }
         },
-        ['wine_red_blend'] = {
+        ['vinewood_red'] = {
             ingredients = { ['grape_cabernet'] = { amount = 5, label = 'Cabernet Sauvignon Grapes' }, ['grape_merlot'] = { amount = 5, label = 'Merlot Grapes' } },
             duration = 40000,
-            output = { item = 'wine_red_blend', amount = 1, label = 'Red Blend Wine', sips = 5 }
+            output = { item = 'vinewood_red', amount = 1, label = 'Vinewood Red', sips = 5 }
         },
-        ['wine_white_blend'] = {
+        ['vinewood_blanc'] = {
             ingredients = { ['grape_chardonnay'] = { amount = 5, label = 'Chardonnay Grapes' }, ['grape_sauvignon'] = { amount = 5, label = 'Sauvignon Blanc Grapes' } },
             duration = 40000,
-            output = { item = 'wine_white_blend', amount = 1, label = 'White Blend Wine', sips = 5 }
+            output = { item = 'vinewood_blanc', amount = 1, label = 'Vinewood Blanc', sips = 5 }
         },
     },
     -- Aging Bonuses (after 7 days in inventory)
@@ -188,8 +200,8 @@ Config = {
         ['wine_merlot'] = { type = 'drunk', duration = 25000, strength = 0.75, screenEffect = 'InchPurple', animation = 'WORLD_HUMAN_DRINKING', prop = 'prop_wine_bot_02', base_sips = 5 },
         ['wine_sauvignon'] = { type = 'buff', duration = 15000, strength = 0.75, screenEffect = 'PPOrange', animation = 'WORLD_HUMAN_DRINKING', prop = 'prop_wine_bot_01', base_sips = 5 },
         ['wine_rose'] = { type = 'drunk', duration = 20000, strength = 0.5, screenEffect = 'Rampage', animation = 'WORLD_HUMAN_DRINKING', prop = 'prop_wine_bot_02', base_sips = 5 },
-        ['wine_red_blend'] = { type = 'drunk', duration = 40000, strength = 1.25, screenEffect = 'DrugsMichaelAliensFight', animation = 'WORLD_HUMAN_DRINKING', prop = 'prop_wine_bot_02', base_sips = 5 },
-        ['wine_white_blend'] = { type = 'buff', duration = 30000, strength = 1.0, screenEffect = 'PPPurple', animation = 'WORLD_HUMAN_DRINKING', prop = 'prop_wine_bot_01', base_sips = 5 },
+        ['vinewood_red'] = { type = 'drunk', duration = 40000, strength = 1.25, screenEffect = 'DrugsMichaelAliensFight', animation = 'WORLD_HUMAN_DRINKING', prop = 'prop_wine_bot_02', base_sips = 5 },
+        ['vinewood_blanc'] = { type = 'buff', duration = 30000, strength = 1.0, screenEffect = 'PPPurple', animation = 'WORLD_HUMAN_DRINKING', prop = 'prop_wine_bot_01', base_sips = 5 },
     },
     -- Sip Settings
     SipEffectMultiplier = 0.5, -- partial effects per sip
@@ -200,13 +212,13 @@ WineBuyer = {
     model = 'a_m_m_hillbilly_01', -- NPC model
     animations = { dict = 'mini@strip_club@idles@bouncer@base', clip = 'base' },
     prices = {
-        ['wine_cabernet'] = 50,
-        ['wine_chardonnay'] = 45,
-        ['wine_merlot'] = 40,
-        ['wine_sauvignon'] = 35,
-        ['wine_rose'] = 30,
-        ['wine_red_blend'] = 60,
-        ['wine_white_blend'] = 55,
+        ['wine_cabernet'] = 250,
+        ['wine_chardonnay'] = 245,
+        ['wine_merlot'] = 240,
+        ['wine_sauvignon'] = 235,
+        ['wine_rose'] = 230,
+        ['vinewood_red'] = 260,
+        ['vinewood_blanc'] = 255,
     }
 },
 -- Job Manager PED
@@ -218,7 +230,7 @@ JobManager = {
 -- Debug: Enable harvest point visualization
 Debug = false,
 -- Wine: Enable built-in consumption effects (false for external food script handling)
-EnableWineConsumption = true,
+EnableWineConsumption = false,
 -- Logging
 DiscordWebhook = '' -- Replace with actual URL
 }

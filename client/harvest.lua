@@ -104,8 +104,11 @@ RegisterNetEvent('wine:startPicking', function(pointKey, zone)
     -- Start animation
     local animDict = zone.animDict
     local animClip = zone.animClip
-    lib.requestAnimDict(animDict)
-    TaskPlayAnim(cache.ped, animDict, animClip, 8.0, -8.0, -1, 1, 0, false, false, false)
+    RequestAnimDict(animDict)
+    while not HasAnimDictLoaded(animDict) do
+        Wait(0)
+    end
+    TaskPlayAnim(cache.ped, animDict, animClip, 8.0, 8.0, -1, 49, 0, true, true, true)
 
     -- Skill check using ox_lib
     if lib.progressCircle({
@@ -125,7 +128,7 @@ RegisterNetEvent('wine:startPicking', function(pointKey, zone)
             pickCooldowns[pointKey] = true
             -- Particle effect: dust
             UseParticleFxAsset('core')
-            StartParticleFxNonLoopedAtCoord('bul_grass', activePickPoints[pointKey].coords.x, activePickPoints[pointKey].coords.y, activePickPoints[pointKey].coords.z + 0.1, 0.0, 0.0, 0.0, 2.0, false, false, false)
+            StartParticleFxNonLoopedAtCoord('ent_amb_dust_motes', activePickPoints[pointKey].coords.x, activePickPoints[pointKey].coords.y, activePickPoints[pointKey].coords.z + 0.1, 0.0, 0.0, 0.0, 2.0, false, false, false)
             SetTimeout(Config.PickCooldown * 1000, function()
                 activePickPoints[pointKey].active = true
                 pickCooldowns[pointKey] = nil

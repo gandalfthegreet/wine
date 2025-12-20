@@ -4,7 +4,7 @@ lua54 'yes'
 use_fxv2_oal 'yes'
 
 name 'wine production system'
-author 'gandalfthegreet'
+author 'gandalfthegreet and skeezle'
 version '1.0.0'
 
 shared_scripts{

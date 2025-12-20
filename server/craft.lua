@@ -25,36 +25,88 @@ RegisterNetEvent('wine:pickGrape', function(pointKey, zoneKey, zone)
         TriggerClientEvent('ox_lib:notify', src, { title = 'Inventory Full', type = 'error' })
         return
     end
-    TriggerClientEvent('wine:startPicking', src, pointKey, zone)
+    TriggerClientEvent('wine:startPicking', src, pointKey, zoneKey, zone)
 end)
 
-RegisterNetEvent('wine:completePick', function(pointKey, zone, success)
+RegisterNetEvent('wine:completePick', function(pointKey, zoneKey, zone, success)
     local src = source
     local player = QBCore.Functions.GetPlayer(src)
     if not player then return end
+
     local grapeData = Config.Grapes[zone.grapeType]
-    if success then
-        player.Functions.AddItem(grapeData.item, grapeData.amount)
-        TriggerClientEvent('ox_lib:notify', src, { title = 'Success', description = 'You picked ' .. grapeData.label, type = 'success' })
-        SendDiscordLog('Grape Harvest', string.format('Player %s picked %s at zone', src, grapeData.label))
+    if not grapeData then return end
 
-        -- Job progression: track completion
-        local job = PlayerJobs[src]
-        if job and job.currentZone == zoneKey then
-            local zonePoints = job.completedPoints[job.currentZone] or {}
-            zonePoints[pointKey] = true
-            job.completedPoints[job.currentZone] = zonePoints
-
-            -- Check if zone is complete
-            local requiredCount = job.totalPointsRequired and job.totalPointsRequired[job.currentZone] or #zone.coords
-            if #zonePoints >= requiredCount then
-                TriggerClientEvent('wine:zoneCompleted', src)
-            end
-        end
-    else
+    if not success then
         TriggerClientEvent('ox_lib:notify', src, { title = 'Failed', description = 'You damaged the grapes!', type = 'error' })
+        return
+    end
+
+    -- Re-check right before giving (inventory may have changed while picking)
+    if not exports.ox_inventory:CanCarryItem(src, grapeData.item, grapeData.amount) then
+        TriggerClientEvent('ox_lib:notify', src, { title = 'Inventory Full', type = 'error' })
+        return
+    end
+
+    -- Give grapes via ox_inventory (NOT QBCore AddItem)
+    local added = exports.ox_inventory:AddItem(src, grapeData.item, grapeData.amount)
+    if not added then
+        TriggerClientEvent('ox_lib:notify', src, { title = 'Inventory Full', type = 'error' })
+        return
+    end
+
+    TriggerClientEvent('ox_lib:notify', src, {
+        title = 'Success',
+        description = ('You picked %s'):format(grapeData.label),
+        type = 'success'
+    })
+
+    SendDiscordLog('Grape Harvest', string.format('Player %s picked %s at zone', src, grapeData.label))
+
+    -- Job progression: track completion (same logic you already had)
+    local job = PlayerJobs[src]
+    if job and job.currentZone == zoneKey then
+        local zonePoints = job.completedPoints[job.currentZone] or {}
+        zonePoints[pointKey] = true
+        job.completedPoints[job.currentZone] = zonePoints
+
+        -- Count completed points properly (since zonePoints is a table keyed by pointKey)
+        local completedCount = 0
+        for _ in pairs(zonePoints) do completedCount += 1 end
+
+        local requiredCount = job.totalPointsRequired and job.totalPointsRequired[job.currentZone] or #zone.coords
+        if completedCount >= requiredCount then
+            TriggerClientEvent('wine:zoneCompleted', src)
+        end
     end
 end)
+
+-- RegisterNetEvent('wine:completePick', function(pointKey, zone, success)
+--     local src = source
+--     local player = QBCore.Functions.GetPlayer(src)
+--     if not player then return end
+--     local grapeData = Config.Grapes[zone.grapeType]
+--     if success then
+--         player.Functions.AddItem(grapeData.item, grapeData.amount)
+--         TriggerClientEvent('ox_lib:notify', src, { title = 'Success', description = 'You picked ' .. grapeData.label, type = 'success' })
+--         SendDiscordLog('Grape Harvest', string.format('Player %s picked %s at zone', src, grapeData.label))
+
+--         -- Job progression: track completion
+--         local job = PlayerJobs[src]
+--         if job and job.currentZone == zoneKey then
+--             local zonePoints = job.completedPoints[job.currentZone] or {}
+--             zonePoints[pointKey] = true
+--             job.completedPoints[job.currentZone] = zonePoints
+
+--             -- Check if zone is complete
+--             local requiredCount = job.totalPointsRequired and job.totalPointsRequired[job.currentZone] or #zone.coords
+--             if #zonePoints >= requiredCount then
+--                 TriggerClientEvent('wine:zoneCompleted', src)
+--             end
+--         end
+--     else
+--         TriggerClientEvent('ox_lib:notify', src, { title = 'Failed', description = 'You damaged the grapes!', type = 'error' })
+--     end
+-- end)
 
 RegisterNetEvent('wine:craftWine', function(recipeKey, recipe)
     local src = source
@@ -78,47 +130,76 @@ RegisterNetEvent('wine:finishCrafting', function(recipeKey, recipe)
     local src = source
     local player = QBCore.Functions.GetPlayer(src)
     if not player then return end
+
     local output = recipe.output
-    local metadata = { description = string.format('A bottle of %s', output.label), created = os.time(), sips_remaining = output.sips }
-    if player.Functions.AddItem(output.item, output.amount, false, metadata) then
-        TriggerClientEvent('ox_lib:notify', src, { title = 'Crafted', description = string.format('You crafted %s', output.label), type = 'success' })
-        SendDiscordLog('Crafting Completed', string.format('Player %s completed crafting %s (sips: %d)', src, recipeKey, output.sips))
+    if not output or not output.item or not output.amount then return end
+
+    -- IMPORTANT: do NOT include "created=os.time()" or every bottle becomes unique and never stacks
+    local metadata = {
+        description = string.format('A bottle of %s', output.label or output.item),
+        sips_remaining = output.sips or 5
+    }
+
+    -- Check room using ox_inventory
+    if not exports.ox_inventory:CanCarryItem(src, output.item, output.amount) then
+        -- refund ingredients
+        for item, req in pairs(recipe.ingredients) do
+            exports.ox_inventory:AddItem(src, item, req.amount)
+        end
+
+        TriggerClientEvent('ox_lib:notify', src, { title = 'Failed', description = 'Inventory full, ingredients refunded', type = 'error' })
+        return
+    end
+
+    -- Add output via ox_inventory
+    local added = exports.ox_inventory:AddItem(src, output.item, output.amount, metadata)
+    if added then
+        TriggerClientEvent('ox_lib:notify', src, { title = 'Crafted', description = string.format('You crafted %s', output.label or output.item), type = 'success' })
+        SendDiscordLog('Crafting Completed', string.format('Player %s completed crafting %s (sips: %d)', src, recipeKey, output.sips or 5))
     else
-        for item, req in pairs(recipe.ingredients) do player.Functions.AddItem(item, req.amount) end
+        -- refund ingredients
+        for item, req in pairs(recipe.ingredients) do
+            exports.ox_inventory:AddItem(src, item, req.amount)
+        end
+
         TriggerClientEvent('ox_lib:notify', src, { title = 'Failed', description = 'Inventory full, ingredients refunded', type = 'error' })
     end
 end)
 
+
 RegisterNetEvent('wine:useWine', function(wineItem)
     local src = source
-    local player = QBCore.Functions.GetPlayer(src)
-    if not player then return end
-    local items = exports.ox_inventory:GetInventoryItems(src)
-    local foundItem
-    for slot, item in pairs(items) do
-        if item.name == wineItem.name then
-            foundItem = item
-            foundItem.slot = slot
-            break
-        end
-    end
-    if not foundItem or foundItem.count < 1 then
-        TriggerClientEvent('ox_lib:notify', src, { title = 'Error', type = 'error' })
+    if type(wineItem) ~= 'table' or not wineItem.name then return end
+
+    local slot = wineItem.slot
+    if not slot then
+        TriggerClientEvent('ox_lib:notify', src, { title = 'Error', description = 'Missing item slot.', type = 'error' })
         return
     end
-    local metadata = foundItem.metadata or {}
-    local maxSips = Config.Effects[wineItem.name] and Config.Effects[wineItem.name].base_sips or 5
-    local isSip = metadata.sips_remaining == nil or metadata.sips_remaining > 1
-    if metadata.sips_remaining then metadata.sips_remaining = isSip and metadata.sips_remaining - 1 or metadata.sips_remaining end
-    if metadata.sips_remaining == nil and not isSip then metadata.sips_remaining = maxSips - 1; isSip = true end
-    if isSip then
-        exports.ox_inventory:SetMetadata(src, foundItem.slot, metadata)
-    else
-        player.Functions.RemoveItem(wineItem.name, 1, foundItem.slot)
+
+    local items = exports.ox_inventory:GetInventoryItems(src)
+    local found = items and items[slot]
+
+    if not found or found.name ~= wineItem.name or (found.count or 0) < 1 then
+        TriggerClientEvent('ox_lib:notify', src, { title = 'Error', description = 'Item not found in that slot.', type = 'error' })
+        return
     end
-    TriggerClientEvent('wine:drinkWine', src, wineItem, isSip)
-    SendDiscordLog('Wine Consumed', isSip and string.format('Player %s sipped %s', src, wineItem.label) or string.format('Player %s finished %s', src, wineItem.label))
+
+    local metadata = found.metadata or {}
+    local maxSips = (Config.Effects[wineItem.name] and Config.Effects[wineItem.name].base_sips) or 5
+    local sips = tonumber(metadata.sips_remaining) or maxSips
+
+    if sips > 1 then
+        metadata.sips_remaining = sips - 1
+        exports.ox_inventory:SetMetadata(src, slot, metadata)
+        TriggerClientEvent('wine:drinkWine', src, wineItem, true)
+    else
+        -- remove bottle via ox_inventory (NOT QBCore)
+        exports.ox_inventory:RemoveItem(src, wineItem.name, 1, nil, slot)
+        TriggerClientEvent('wine:drinkWine', src, wineItem, false)
+    end
 end)
+
 
 RegisterNetEvent('wine:craftingCanceled', function(recipeKey, recipe)
     local src = source
